@@ -61,7 +61,7 @@ def bullish_snapshot(**overrides):
                 entry=(2406.20, 2406.80),
                 stop_loss=2403.80,
                 take_profit_1=2412.20,
-                take_profit_2=2413.80,
+                take_profit_2=2414.60,
                 score=8,
                 setup_type="Demand retest after sell-side liquidity sweep",
                 confirmation=EntryConfirmation(
