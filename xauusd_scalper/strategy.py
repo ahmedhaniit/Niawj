@@ -509,7 +509,7 @@ def build_setup(candles: list[Candle], bias: Bias, direction: Direction) -> Trad
         tp2 = _round_price(entry - 2 * risk)
 
     rr_value = _rr(entry, stop_loss, tp2, direction)
-    if rr_value < 2:
+    if rr_value + 1e-9 < 2:
         return None
 
     score = 10
