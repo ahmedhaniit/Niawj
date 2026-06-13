@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "niawj"
+version = "0.1.0"
+description = "Strict XAUUSD M5 scalping setup analyzer"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+xauusd-scalper = "xauusd_scalper.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
