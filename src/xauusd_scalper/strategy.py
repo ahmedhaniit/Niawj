@@ -499,7 +499,7 @@ def _ema_aligned(direction: Direction, ema20: float, ema50: float, close: float)
 def _rsi_valid(direction: Direction, rsi: float) -> bool:
     if direction == "Buy":
         return 45 <= rsi <= 68
-    return 32 <= rsi <= 55
+    return 30 <= rsi <= 55
 
 
 def _order_block(candles: Sequence[Candle], direction: Direction, sweep_index: int) -> Zone | None:
