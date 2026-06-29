@@ -97,7 +97,8 @@ class AnalyzeSnapshotTest(unittest.TestCase):
 
     def test_rejects_when_risk_reward_is_below_two(self) -> None:
         snapshot = valid_buy_snapshot()
-        snapshot["setup"]["take_profit_2"] = 2635.0
+        snapshot["setup"]["take_profit_1"] = 2634.5
+        snapshot["setup"]["take_profit_2"] = 2636.0
 
         decision = analyze_snapshot(snapshot)
 
