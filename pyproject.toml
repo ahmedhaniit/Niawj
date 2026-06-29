@@ -1,0 +1,8 @@
+[project]
+name = "niawj-xauusd-scalper"
+version = "0.1.0"
+description = "Strict XAUUSD M5 scalping setup evaluator"
+requires-python = ">=3.10"
+
+[project.scripts]
+xauusd-scalper = "xauusd_scalper.cli:main"
