@@ -34,7 +34,7 @@ def _valid_buy_fixture():
     end = datetime(2026, 7, 1, 12, 5, tzinfo=timezone.utc)
     first_time = end - timedelta(minutes=5 * 59)
     candles = []
-    for index in range(57):
+    for index in range(58):
         anchor = 1998.0 + index * 0.18
         open_ = anchor - 0.15
         close = anchor + (0.25 if index % 3 else -0.05)
