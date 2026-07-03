@@ -393,7 +393,7 @@ def _build_candidate(
         if risk <= 0:
             return None
         take_profit_1 = round(entry + risk, 2)
-        take_profit_2 = round(entry + risk * config.min_risk_reward, 2)
+        take_profit_2 = round(entry + risk * 2.0, 2)
         setup_type = "Buy after sell-side liquidity sweep into demand OB/FVG"
     else:
         stop_loss = round(max(sweep.extreme, order_block.high) + buffer, 2)
@@ -401,7 +401,7 @@ def _build_candidate(
         if risk <= 0:
             return None
         take_profit_1 = round(entry - risk, 2)
-        take_profit_2 = round(entry - risk * config.min_risk_reward, 2)
+        take_profit_2 = round(entry - risk * 2.0, 2)
         setup_type = "Sell after buy-side liquidity sweep into supply OB/FVG"
 
     risk_reward = _risk_reward(entry, stop_loss, take_profit_2, direction)
@@ -522,12 +522,15 @@ def _equal_level(
     tolerance: float,
 ) -> float | None:
     levels = [candle.high if side == "high" else candle.low for candle in candles]
+    matches: list[float] = []
     for index in range(len(levels) - 1, 0, -1):
         level = levels[index]
         for other in reversed(levels[:index]):
             if abs(level - other) <= tolerance:
-                return (level + other) / 2
-    return None
+                matches.append((level + other) / 2)
+    if not matches:
+        return None
+    return min(matches) if side == "low" else max(matches)
 
 
 def _has_candle_confirmation(candles: list[Candle], sweep: Sweep, displacement: bool) -> bool:
