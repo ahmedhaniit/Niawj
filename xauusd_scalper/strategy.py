@@ -483,44 +483,64 @@ def _detect_liquidity_sweep(
 
     start = max(18, len(candles) - config.sweep_scan_candles - 1)
     end = len(candles) - 1
-    for index in range(start, end):
+    for index in reversed(range(start, end)):
         prior = candles[max(0, index - 30) : index]
         if len(prior) < 12:
             continue
+        candle = candles[index]
         if direction == "Buy":
-            equal_low = _equal_level(prior, "low", config.equal_level_tolerance)
+            equal_low = _swept_equal_level(candle, prior, "low", config)
             if equal_low is None:
                 continue
-            candle = candles[index]
-            if candle.low < equal_low - config.sweep_break_buffer and candle.close > equal_low:
-                return Sweep(
-                    direction=direction,
-                    index=index,
-                    level=equal_low,
-                    extreme=candle.low,
-                    liquidity_side="Sell-side",
-                )
+            return Sweep(
+                direction=direction,
+                index=index,
+                level=equal_low,
+                extreme=candle.low,
+                liquidity_side="Sell-side",
+            )
         else:
-            equal_high = _equal_level(prior, "high", config.equal_level_tolerance)
+            equal_high = _swept_equal_level(candle, prior, "high", config)
             if equal_high is None:
                 continue
-            candle = candles[index]
-            if candle.high > equal_high + config.sweep_break_buffer and candle.close < equal_high:
-                return Sweep(
-                    direction=direction,
-                    index=index,
-                    level=equal_high,
-                    extreme=candle.high,
-                    liquidity_side="Buy-side",
-                )
+            return Sweep(
+                direction=direction,
+                index=index,
+                level=equal_high,
+                extreme=candle.high,
+                liquidity_side="Buy-side",
+            )
     return None
 
 
-def _equal_level(
+def _swept_equal_level(
+    sweep_candle: Candle,
+    prior: list[Candle],
+    side: Literal["high", "low"],
+    config: StrategyConfig,
+) -> float | None:
+    levels = _equal_levels(prior, side, config.equal_level_tolerance)
+    if side == "low":
+        swept = [
+            level
+            for level in levels
+            if sweep_candle.low < level - config.sweep_break_buffer and sweep_candle.close > level
+        ]
+        return max(swept) if swept else None
+
+    swept = [
+        level
+        for level in levels
+        if sweep_candle.high > level + config.sweep_break_buffer and sweep_candle.close < level
+    ]
+    return min(swept) if swept else None
+
+
+def _equal_levels(
     candles: list[Candle],
     side: Literal["high", "low"],
     tolerance: float,
-) -> float | None:
+) -> list[float]:
     levels = [candle.high if side == "high" else candle.low for candle in candles]
     matches: list[float] = []
     for index in range(len(levels) - 1, 0, -1):
@@ -528,13 +548,11 @@ def _equal_level(
         for other in reversed(levels[:index]):
             if abs(level - other) <= tolerance:
                 matches.append((level + other) / 2)
-    if not matches:
-        return None
-    return min(matches) if side == "low" else max(matches)
+    return matches
 
 
 def _has_candle_confirmation(candles: list[Candle], sweep: Sweep, displacement: bool) -> bool:
-    if sweep.index >= len(candles) - 1:
+    if sweep.index != len(candles) - 2:
         return False
 
     current = candles[-1]

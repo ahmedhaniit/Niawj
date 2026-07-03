@@ -124,7 +124,7 @@ class XauusdStrategyTests(unittest.TestCase):
     def test_returns_no_trade_without_liquidity_sweep(self) -> None:
         m5, m15, h1 = _valid_buy_fixture()
         sweep = m5[-2]
-        m5[-2] = _candle(sweep.time, sweep.open, sweep.high, 2004.05, sweep.close)
+        m5[-2] = _candle(sweep.time, sweep.open, sweep.high, sweep.low, 2003.90)
 
         self.assertEqual(NO_TRADE, evaluate_xauusd_scalp(m5, m15, h1))
 
