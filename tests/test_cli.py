@@ -4,7 +4,7 @@ import csv
 import io
 import sys
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -34,8 +34,10 @@ def _write_candles(path: Path, candles: list[Candle]) -> None:
 class CliTests(unittest.TestCase):
     def test_state_path_is_mandatory(self) -> None:
         parser = build_parser()
-        with self.assertRaises(SystemExit):
-            parser.parse_args(["--m5", "m5.csv", "--m15", "m15.csv", "--h1", "h1.csv"])
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            parser.parse_args(
+                ["--m5", "m5.csv", "--m15", "m15.csv", "--h1", "h1.csv"]
+            )
 
     def test_successful_signal_is_recorded_automatically_and_not_repeated(self) -> None:
         m5, m15, h1 = _valid_buy_fixture()

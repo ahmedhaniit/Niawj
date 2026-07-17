@@ -53,6 +53,10 @@ python3 -m xauusd_scalper.cli \
   --state .runtime/xauusd-session-state.json
 ```
 
+For a feed that closes candles exactly on UTC five-minute boundaries, the
+equivalent cron cadence is `*/5 * * * *`. Schedule only one process per state
+file.
+
 The state path is mandatory. A successful setup is recorded automatically and
 written atomically so later executions can enforce the London/New York cap.
 Direct Python callers must likewise pass a loaded `TradeState` and record an
