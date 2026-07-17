@@ -24,15 +24,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--m15", required=True, help="CSV path for M15 candles")
     parser.add_argument("--h1", required=True, help="CSV path for H1 candles")
     parser.add_argument("--now", help="Override signal time as an ISO timestamp")
-    parser.add_argument("--state", help="JSON state file used to enforce session signal limits")
     parser.add_argument(
-        "--record",
-        action="store_true",
-        help="Record a generated setup in --state after analysis",
+        "--state",
+        required=True,
+        help="Persistent JSON state file used to enforce session signal limits",
     )
     parser.add_argument(
         "--max-trades-per-session",
         type=int,
+        choices=(1, 2),
         default=2,
         help="Maximum valid setups per London/New York session",
     )
@@ -50,11 +50,11 @@ def main() -> int:
     state = load_trade_state(args.state)
     config = StrategyConfig(max_session_trades=args.max_trades_per_session)
 
-    result = evaluate_xauusd_scalp(m5, m15, h1, state=state if args.state else None, config=config, now=now)
+    result = evaluate_xauusd_scalp(m5, m15, h1, state=state, config=config, now=now)
     print(result)
 
-    if args.record and args.state and result != NO_TRADE:
-        record_session_trade(state, now or m5[-1].time)
+    if result != NO_TRADE:
+        record_session_trade(state, now or m5[-1].time, candle_time=m5[-1].time)
         save_trade_state(args.state, state)
 
     return 0
