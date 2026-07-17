@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime, timedelta, timezone
+from tempfile import TemporaryDirectory
+from pathlib import Path
 
 from xauusd_scalper import (
     NO_TRADE,
@@ -10,6 +12,9 @@ from xauusd_scalper import (
     TradeState,
     active_session,
     evaluate_xauusd_scalp,
+    load_trade_state,
+    record_session_trade,
+    save_trade_state,
     session_key,
 )
 
@@ -100,7 +105,7 @@ class XauusdStrategyTests(unittest.TestCase):
     def test_returns_one_valid_buy_setup_when_all_conditions_align(self) -> None:
         m5, m15, h1 = _valid_buy_fixture()
 
-        result = evaluate_xauusd_scalp(m5, m15, h1)
+        result = evaluate_xauusd_scalp(m5, m15, h1, state=TradeState())
 
         self.assertNotEqual(NO_TRADE, result)
         self.assertIn("Market Bias: Bullish", result)
@@ -113,7 +118,12 @@ class XauusdStrategyTests(unittest.TestCase):
     def test_returns_one_valid_sell_setup_when_bearish_conditions_align(self) -> None:
         m5, m15, h1 = _valid_buy_fixture()
 
-        result = evaluate_xauusd_scalp(_mirror(m5), _mirror(m15), _mirror(h1))
+        result = evaluate_xauusd_scalp(
+            _mirror(m5),
+            _mirror(m15),
+            _mirror(h1),
+            state=TradeState(),
+        )
 
         self.assertNotEqual(NO_TRADE, result)
         self.assertIn("Market Bias: Bearish", result)
@@ -126,7 +136,10 @@ class XauusdStrategyTests(unittest.TestCase):
         sweep = m5[-2]
         m5[-2] = _candle(sweep.time, sweep.open, sweep.high, 2007.20, 2007.30)
 
-        self.assertEqual(NO_TRADE, evaluate_xauusd_scalp(m5, m15, h1))
+        self.assertEqual(
+            NO_TRADE,
+            evaluate_xauusd_scalp(m5, m15, h1, state=TradeState()),
+        )
 
     def test_returns_no_trade_in_low_volatility_chop(self) -> None:
         end = datetime(2026, 7, 3, 12, 5, tzinfo=timezone.utc)
@@ -143,11 +156,20 @@ class XauusdStrategyTests(unittest.TestCase):
         ]
         m15, h1 = _bullish_htf(end)
 
-        self.assertEqual(NO_TRADE, evaluate_xauusd_scalp(m5, m15, h1))
+        self.assertEqual(
+            NO_TRADE,
+            evaluate_xauusd_scalp(m5, m15, h1, state=TradeState()),
+        )
 
     def test_session_filter_blocks_outside_london_and_new_york(self) -> None:
         m5, m15, h1 = _valid_buy_fixture()
-        result = evaluate_xauusd_scalp(m5, m15, h1, now=datetime(2026, 7, 3, 22, 0, tzinfo=timezone.utc))
+        result = evaluate_xauusd_scalp(
+            m5,
+            m15,
+            h1,
+            state=TradeState(),
+            now=datetime(2026, 7, 3, 22, 0, tzinfo=timezone.utc),
+        )
 
         self.assertEqual(NO_TRADE, result)
 
@@ -164,9 +186,98 @@ class XauusdStrategyTests(unittest.TestCase):
     def test_minimum_risk_reward_config_is_enforced(self) -> None:
         m5, m15, h1 = _valid_buy_fixture()
 
-        result = evaluate_xauusd_scalp(m5, m15, h1, config=StrategyConfig(min_risk_reward=2.5))
+        result = evaluate_xauusd_scalp(
+            m5,
+            m15,
+            h1,
+            state=TradeState(),
+            config=StrategyConfig(min_risk_reward=2.5),
+        )
 
         self.assertEqual(NO_TRADE, result)
+
+    def test_returns_no_trade_when_session_state_is_missing(self) -> None:
+        m5, m15, h1 = _valid_buy_fixture()
+
+        self.assertEqual(NO_TRADE, evaluate_xauusd_scalp(m5, m15, h1))
+
+    def test_returns_no_trade_without_strong_rejection_wick(self) -> None:
+        m5, m15, h1 = _valid_buy_fixture()
+        sweep = m5[-2]
+        m5[-2] = _candle(sweep.time, sweep.open, sweep.high, 2005.80, sweep.close)
+
+        self.assertEqual(
+            NO_TRADE,
+            evaluate_xauusd_scalp(m5, m15, h1, state=TradeState()),
+        )
+
+    def test_returns_no_trade_without_post_sweep_fvg(self) -> None:
+        m5, m15, h1 = _valid_buy_fixture()
+        confirmation = m5[-1]
+        m5[-1] = _candle(
+            confirmation.time,
+            confirmation.open,
+            confirmation.high,
+            2005.20,
+            confirmation.close,
+        )
+
+        self.assertEqual(
+            NO_TRADE,
+            evaluate_xauusd_scalp(m5, m15, h1, state=TradeState()),
+        )
+
+    def test_returns_no_trade_when_higher_timeframes_disagree(self) -> None:
+        m5, m15, h1 = _valid_buy_fixture()
+
+        self.assertEqual(
+            NO_TRADE,
+            evaluate_xauusd_scalp(m5, m15, _mirror(h1), state=TradeState()),
+        )
+
+    def test_returns_no_trade_for_stale_m5_data(self) -> None:
+        m5, m15, h1 = _valid_buy_fixture()
+
+        self.assertEqual(
+            NO_TRADE,
+            evaluate_xauusd_scalp(
+                m5,
+                m15,
+                h1,
+                state=TradeState(),
+                now=m5[-1].time + timedelta(minutes=7),
+            ),
+        )
+
+    def test_strict_configuration_floors_cannot_be_weakened(self) -> None:
+        with self.assertRaises(ValueError):
+            StrategyConfig(max_session_trades=3)
+        with self.assertRaises(ValueError):
+            StrategyConfig(min_risk_reward=1.5)
+        with self.assertRaises(ValueError):
+            StrategyConfig(min_adx=19.0)
+
+    def test_recorded_candle_cannot_emit_duplicate_setup(self) -> None:
+        m5, m15, h1 = _valid_buy_fixture()
+        state = TradeState()
+        record_session_trade(state, m5[-1].time, candle_time=m5[-1].time)
+
+        self.assertEqual(
+            NO_TRADE,
+            evaluate_xauusd_scalp(m5, m15, h1, state=state),
+        )
+
+    def test_trade_state_round_trip_preserves_counts_and_signal_identity(self) -> None:
+        m5, _, _ = _valid_buy_fixture()
+        state = TradeState()
+        record_session_trade(state, m5[-1].time, candle_time=m5[-1].time)
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            save_trade_state(path, state)
+            loaded = load_trade_state(path)
+
+        self.assertEqual(state, loaded)
 
 
 if __name__ == "__main__":
