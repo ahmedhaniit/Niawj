@@ -137,10 +137,10 @@ class StrategyConfig:
     min_adx: float = 20.0
     impulse_range_multiplier: float = 1.25
     impulse_body_fraction: float = 0.55
-    buy_rsi_floor: float = 35.0
-    buy_rsi_ceiling: float = 78.0
-    sell_rsi_floor: float = 22.0
-    sell_rsi_ceiling: float = 65.0
+    buy_rsi_floor: float = 40.0
+    buy_rsi_ceiling: float = 70.0
+    sell_rsi_floor: float = 30.0
+    sell_rsi_ceiling: float = 60.0
     sweep_scan_candles: int = 5
     structure_lookback: int = 14
     min_rejection_wick_fraction: float = 0.25
