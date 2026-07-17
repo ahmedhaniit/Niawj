@@ -114,6 +114,7 @@ class TradeState:
     """
 
     session_trade_counts: dict[str, dict[str, int]] = field(default_factory=dict)
+    last_signal_candles: dict[str, dict[str, str]] = field(default_factory=dict)
 
     @classmethod
     def from_legacy_counts(cls, counts: dict[str, int]) -> "TradeState":
@@ -239,6 +240,22 @@ def load_trade_state(path: str | Path | None) -> TradeState:
     if not isinstance(data, dict):
         raise ValueError("Trade state must be a JSON object")
 
+    if "session_trade_counts" in data:
+        counts = data.get("session_trade_counts")
+        last_signals = data.get("last_signal_candles", {})
+        if not isinstance(counts, dict) or not isinstance(last_signals, dict):
+            raise ValueError("Trade state fields must be JSON objects")
+        return TradeState(
+            session_trade_counts={
+                str(day): {str(session): int(count) for session, count in sessions.items()}
+                for day, sessions in counts.items()
+            },
+            last_signal_candles={
+                str(day): {str(session): str(value) for session, value in sessions.items()}
+                for day, sessions in last_signals.items()
+            },
+        )
+
     # Preferred shape: {"2026-07-03": {"London": 1, "New York": 0}}
     if all(isinstance(value, dict) for value in data.values()):
         return TradeState(
@@ -253,13 +270,23 @@ def load_trade_state(path: str | Path | None) -> TradeState:
 
 
 def save_trade_state(path: str | Path, state: TradeState) -> None:
-    """Persist per-session trade counts."""
+    """Persist per-session trade counts with an atomic file replacement."""
 
     state_path = Path(path)
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    with state_path.open("w", encoding="utf-8") as handle:
-        json.dump(state.session_trade_counts, handle, indent=2, sort_keys=True)
+    temporary_path = state_path.with_name(f".{state_path.name}.tmp")
+    with temporary_path.open("w", encoding="utf-8") as handle:
+        json.dump(
+            {
+                "session_trade_counts": state.session_trade_counts,
+                "last_signal_candles": state.last_signal_candles,
+            },
+            handle,
+            indent=2,
+            sort_keys=True,
+        )
         handle.write("\n")
+    temporary_path.replace(state_path)
 
 
 def active_session(timestamp: datetime) -> SessionName | None:
@@ -305,7 +332,26 @@ def can_open_session_trade(
     return state.session_trade_counts.get(day, {}).get(session, 0) < max_session_trades
 
 
-def record_session_trade(state: TradeState, timestamp: datetime) -> TradeState:
+def has_recorded_signal(
+    state: TradeState,
+    timestamp: datetime,
+    candle_time: datetime,
+) -> bool:
+    """Return whether this candle already emitted a setup in the active session."""
+
+    session = active_session(timestamp)
+    if session is None:
+        return True
+    day = session_key(timestamp)
+    normalized = _normalize_datetime(candle_time).isoformat()
+    return state.last_signal_candles.get(day, {}).get(session) == normalized
+
+
+def record_session_trade(
+    state: TradeState,
+    timestamp: datetime,
+    candle_time: datetime | None = None,
+) -> TradeState:
     """Increment the active session's generated setup count."""
 
     session = active_session(timestamp)
@@ -314,6 +360,8 @@ def record_session_trade(state: TradeState, timestamp: datetime) -> TradeState:
     day = session_key(timestamp)
     state.session_trade_counts.setdefault(day, {})
     state.session_trade_counts[day][session] = state.session_trade_counts[day].get(session, 0) + 1
+    state.last_signal_candles.setdefault(day, {})
+    state.last_signal_candles[day][session] = _normalize_datetime(candle_time or timestamp).isoformat()
     return state
 
 
@@ -347,6 +395,9 @@ def evaluate_xauusd_scalp(
         signal_time,
         max_session_trades=cfg.max_session_trades,
     ):
+        return NO_TRADE
+
+    if has_recorded_signal(state, signal_time, m5[-1].time):
         return NO_TRADE
 
     if not _is_fresh(m5[-1].time, signal_time, cfg.max_data_age_minutes):
@@ -952,7 +1003,13 @@ def _adx(candles: list[Candle], period: int) -> float:
 
 
 def _is_fresh(candle_time: datetime, signal_time: datetime, max_age_minutes: float) -> bool:
-    candle_utc = candle_time.replace(tzinfo=timezone.utc) if candle_time.tzinfo is None else candle_time.astimezone(timezone.utc)
-    signal_utc = signal_time.replace(tzinfo=timezone.utc) if signal_time.tzinfo is None else signal_time.astimezone(timezone.utc)
+    candle_utc = _normalize_datetime(candle_time)
+    signal_utc = _normalize_datetime(signal_time)
     age_seconds = (signal_utc - candle_utc).total_seconds()
     return -60 <= age_seconds <= max_age_minutes * 60
+
+
+def _normalize_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
