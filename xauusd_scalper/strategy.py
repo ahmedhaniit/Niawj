@@ -293,7 +293,7 @@ def active_session(timestamp: datetime) -> SessionName | None:
     """Return the active London/New York session for a UTC timestamp.
 
     During the overlap, setups are attributed to New York so a setup is counted
-    against one session only.
+    against one session only. Weekends are always outside the tradable window.
     """
 
     utc_time = timestamp
@@ -301,6 +301,10 @@ def active_session(timestamp: datetime) -> SessionName | None:
         utc_time = utc_time.replace(tzinfo=timezone.utc)
     else:
         utc_time = utc_time.astimezone(timezone.utc)
+
+    # Monday=0 … Sunday=6 — XAUUSD cash sessions do not trade Saturday/Sunday.
+    if utc_time.weekday() >= 5:
+        return None
 
     minutes = utc_time.hour * 60 + utc_time.minute
     if 12 * 60 <= minutes < 21 * 60:
