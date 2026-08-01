@@ -173,6 +173,22 @@ class XauusdStrategyTests(unittest.TestCase):
 
         self.assertEqual(NO_TRADE, result)
 
+    def test_session_filter_blocks_weekend_even_during_weekday_hours(self) -> None:
+        m5, m15, h1 = _valid_buy_fixture()
+        saturday_noon = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+
+        self.assertIsNone(active_session(saturday_noon))
+        self.assertEqual(
+            NO_TRADE,
+            evaluate_xauusd_scalp(
+                m5,
+                m15,
+                h1,
+                state=TradeState(),
+                now=saturday_noon,
+            ),
+        )
+
     def test_session_trade_limit_blocks_third_setup(self) -> None:
         m5, m15, h1 = _valid_buy_fixture()
         now = datetime(2026, 7, 3, 12, 5, tzinfo=timezone.utc)
