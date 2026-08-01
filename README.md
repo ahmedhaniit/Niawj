@@ -8,9 +8,9 @@ Dependency-free Python evaluator for strict XAUUSD scalping setups on the
 `evaluate_xauusd_scalp` returns exactly one formatted setup only when all
 mandatory rules align:
 
-- London or New York session only, with persisted state enforcing a maximum of
-  two generated setups per session and blocking duplicate signals for one M5
-  candle.
+- London or New York session only (weekdays), with persisted state enforcing a
+  maximum of two generated setups per session and blocking duplicate signals
+  for one M5 candle. Weekends always return no-trade.
 - M15 and H1 bias agree as `Bullish` or `Bearish`, each with a close-confirmed
   BOS/CHoCH and mapped buy-side/sell-side liquidity.
 - M5 trend, BOS/CHoCH, and momentum shift align with the higher-timeframe bias.
